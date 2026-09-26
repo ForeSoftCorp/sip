@@ -1,0 +1,31 @@
+{
+    "name": "@foresoft/sip",
+    "version": "1.0",
+    "type": "module",
+    "engines": {
+        "node": ">= 24.0.0"
+    },
+    "exports": {
+        ".": "./src/index.ts",
+        "./cli": "./src/cli.ts",
+        "./logger": "./src/logger.ts",
+        "./runner": "./src/runner.ts",
+        "./utils": "./src/utils.ts",
+        "./fs": "./src/fs.ts",
+        "./make": "./src/make.ts"
+    },
+    "bin": {
+        "sip": "./src/cli.ts"
+    },
+    "devDependencies": {
+        "@types/node": "26.2.0",
+        "oxlint": "^1.79.0",
+        "oxlint-tsgolint": "^7.0.2001",
+		"@ogs-gmbh/oxlint-presets": "1.1.0",
+        "typescript": "7.0.2"
+    },
+    "scripts": {
+        "lint": "oxlint --config .oxlint.config.js src tests",
+        "test": "node --test tests/sip.test.ts"
+    }
+}
