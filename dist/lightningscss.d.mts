@@ -5,6 +5,8 @@ export type LightningscssOptions<C extends CustomAtRules = CustomAtRules> = Omit
     sourcemap?: boolean;
     /** Base directory for src, dest, projectRoot, and Sass loadPaths. */
     cwd?: string;
+    /** Ensure generated CSS has a UTF-8 BOM. Defaults to false. */
+    bom?: boolean;
     /** Enable Sass with true or compilation options. False or omission processes plain CSS. */
     sass?: boolean | Omit<SassOptions<"async">, "sourceMap" | "logger">;
 };

@@ -54,6 +54,58 @@ void test("lightningscss enables Sass defaults with true or an empty options obj
 	}
 });
 
+for (const sass of [false, true]) {
+	void test(`lightningscss can mark UTF-8 output with a single BOM with sass=${sass}`, async t => {
+		const cwd = await mkdtemp(path.join(tempDirectory, "sip-css-bom-"));
+		t.after(() => rm(cwd, { recursive: true, force: true }));
+		const src = sass ? "main.scss" : "main.css";
+		const source = '.icon::before { content: "\\e9 \\e001"; }\n.second { color: red; }\n';
+		await writeFile(path.join(cwd, src), source);
+		for (const sourceMap of [false, true]) {
+			let unprefixed: Buffer | undefined;
+			for (const options of [{}, { bom: false }, { bom: true }]) {
+				const dest = `out/style-${sourceMap}.css`;
+				await lightningscss(src, dest, { cwd, sass, sourceMap, minify: false, ...options });
+				const bytes = await readFile(path.join(cwd, dest));
+				if (options.bom) {
+					assert.deepEqual(bytes.subarray(0, 3), Buffer.from([0xEF, 0xBB, 0xBF]));
+					assert.deepEqual(bytes.subarray(3), unprefixed);
+				} else {
+					assert.notEqual(bytes[0], 0xEF);
+					unprefixed ??= bytes;
+					assert.deepEqual(bytes, unprefixed);
+				}
+				// UTF-8 decoding consumes the signature, leaving source-map columns intact.
+				const css = new TextDecoder().decode(bytes);
+				assert.ok(css.includes('\u00E9\uE001'), "CSS escapes should become literal UTF-8 characters");
+				if (sourceMap) {
+					const mapUrl = pathToFileURL(path.join(cwd, `${dest}.map`));
+					const map = JSON.parse(await readFile(mapUrl, "utf8"));
+					assert.match(css, /sourceMappingURL=style-true\.css\.map/);
+					const consumer = new SourceMapConsumer(map);
+					const lines = css.split("\n");
+					for (const [selector, expectedLine] of [[".icon", 1], [".second", 2]] as const) {
+						const line = lines.findIndex(value => value.includes(selector));
+						const generatedLine = lines[line];
+						assert.ok(generatedLine !== undefined);
+						const original = consumer.originalPositionFor({ line: line + 1, column: generatedLine.indexOf(selector) });
+						assert.equal(original.line, expectedLine);
+						assert.equal(fileURLToPath(new URL(original.source, mapUrl)), path.join(cwd, src));
+					}
+				} else {
+					assert.doesNotMatch(css, /sourceMappingURL/);
+					await assert.rejects(stat(path.join(cwd, `${dest}.map`)), { code: "ENOENT" });
+				}
+			}
+		}
+		await writeFile(path.join(cwd, src), `\uFEFF${source}`);
+		await lightningscss(src, "existing-bom.css", { cwd, sass, bom: true });
+		const bytes = await readFile(path.join(cwd, "existing-bom.css"));
+		assert.deepEqual(bytes.subarray(0, 3), Buffer.from([0xEF, 0xBB, 0xBF]));
+		assert.notEqual(bytes[3], 0xEF, "An existing BOM must not be duplicated");
+	});
+}
+
 void test("lightningscss compiles imports, minifies, and applies browser targets in separate directories", async t => {
 	const originalCwd = process.cwd();
 	await Promise.all(["red", "blue"].map(async color => {

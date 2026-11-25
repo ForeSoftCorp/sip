@@ -258,6 +258,8 @@ The pipeline manages input code, filenames, source maps, and Sass logging. CSS M
 
 `sourcemap` is an alias for `sourceMap`. If both are specified, `sourceMap` takes precedence, including when it is `false`.
 
+Set `bom: true` to ensure the generated CSS starts with a UTF-8 byte order mark. This makes the encoding explicit when Lightning CSS emits literal Unicode characters instead of CSS escapes. The option defaults to `false`, works with both CSS and Sass, does not duplicate an existing BOM, and does not add a BOM to the source-map JSON.
+
 ## Image processing
 
 Install `@napi-rs/image` as a development dependency. Import `image` and `ImageOptions` from `@foresoft/sip/image`.

@@ -7,6 +7,8 @@ import type { CustomAtRules, TransformOptions } from "lightningcss";
 import type { Logger as SassLogger, Options as SassOptions } from "sass-embedded";
 import { logger } from "./logger.mts";
 
+const utf8Bom = Buffer.from("\uFEFF");
+
 export type LightningscssOptions<C extends CustomAtRules = CustomAtRules> = Omit<
 	TransformOptions<C>, "filename" | "code" | "inputSourceMap" | "cssModules" | "analyzeDependencies"
 > & {
@@ -14,6 +16,8 @@ export type LightningscssOptions<C extends CustomAtRules = CustomAtRules> = Omit
 	sourcemap?: boolean;
 	/** Base directory for src, dest, projectRoot, and Sass loadPaths. */
 	cwd?: string;
+	/** Ensure generated CSS has a UTF-8 BOM. Defaults to false. */
+	bom?: boolean;
 	/** Enable Sass with true or compilation options. False or omission processes plain CSS. */
 	sass?: boolean | Omit<SassOptions<"async">, "sourceMap" | "logger">;
 };
@@ -25,7 +29,7 @@ export async function lightningscss<C extends CustomAtRules = CustomAtRules>(
 	assert.ok(typeof src === "string" && src.length > 0, "lightningscss requires an entry file");
 	assert.ok(typeof dest === "string" && dest.length > 0, "lightningscss requires a destination file");
 	assert.ok(options.cwd === undefined || (typeof options.cwd === "string" && options.cwd.length > 0), "cwd must be a non-empty string");
-	const { cwd: baseDirectory, sass: sassOptions, sourcemap, ...cssOptions } = options;
+	const { cwd: baseDirectory, sass: sassOptions, sourcemap, bom = false, ...cssOptions } = options;
 	const sourceMap = cssOptions.sourceMap ?? sourcemap ?? false;
 	const cwd = path.resolve(baseDirectory ?? process.cwd());
 	const input = path.resolve(cwd, src);
@@ -78,6 +82,9 @@ export async function lightningscss<C extends CustomAtRules = CustomAtRules>(
 	const result = transform(transformOptions);
 	for (const warning of result.warnings)
 		logger.warning(warning.message, warning);
+	const output = [result.code];
+	if (bom && !utf8Bom.equals(result.code.subarray(0, utf8Bom.length)))
+		output.unshift(utf8Bom);
 	await mkdir(path.dirname(file), { recursive: true });
 	if (result.map) {
 		const map = JSON.parse(Buffer.from(result.map).toString("utf8"));
@@ -93,8 +100,7 @@ export async function lightningscss<C extends CustomAtRules = CustomAtRules>(
 		});
 		await writeFile(`${file}.map`, JSON.stringify(map));
 		const reference = `\n/*# sourceMappingURL=${encodeURIComponent(path.basename(file))}.map */\n`;
-		await writeFile(file, Buffer.concat([result.code, Buffer.from(reference)]));
-	} else {
-		await writeFile(file, result.code);
+		output.push(Buffer.from(reference));
 	}
+	await writeFile(file, output.length === 1 ? result.code : Buffer.concat(output));
 }
