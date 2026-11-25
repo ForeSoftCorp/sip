@@ -68,15 +68,19 @@ export function make(displayOrSpec, specOrExecutor, maybeExecutor) {
         const changedCount = resolved.filter(file => file.changed).length;
         logger.debug(`make: ${changedCount ? "running executor" : "skipping executor"} (${changedCount}/${resolved.length} changed)`);
         if (changedCount) {
-            for (const dest of new Set(resolved.filter(file => file.changed).map(file => file.dest)))
-                logger.verbose(`${label}: ${dest}`);
-            await executor.call(this, { cwd, resolved });
+            const run = async () => {
+                for (const dest of new Set(resolved.filter(file => file.changed).map(file => file.dest)))
+                    logger.verbose(`${label}: ${dest}`);
+                await executor.call(this, { cwd, resolved });
+            };
+            if (display !== undefined)
+                run.displayName = display;
+            await this.run(run);
         }
         else {
             for (const dest of new Set(resolved.map(file => file.dest)))
                 logger.verbose(`${label}: ${dest} (skipped, up to date)`);
         }
     };
-    result.displayName = display;
     return result;
 }

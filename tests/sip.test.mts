@@ -518,6 +518,105 @@ void test("make runs for a missing or stale destination but skips an up-to-date 
 	assert.throws(() => make({ src: "", dest: destination }, () => {}), /requires src/);
 });
 
+void test("named make reports lifecycle only for changed work and retains skip diagnostics", async t => {
+	const directory = await temporaryDirectory();
+	const source = path.join(directory, "source.txt");
+	const destination = path.join(directory, "destination.txt");
+	await writeFile(source, "source");
+	const past = new Date(Date.now() - 2_000);
+	await utimes(source, past, past);
+	const runner = new TaskRunner();
+	const events: { event: string; message: string; id: number | undefined }[] = [];
+	for (const event of ["taskStart", "taskEnd", "verbose", "debug", "info"] as const) {
+		const listener = (message: string) => { events.push({ event, message, id: logger.taskId }); };
+		logger.on(event, listener);
+		t.after(() => { logger.off(event, listener); });
+	}
+	let executions = 0;
+	const build = make("Compile", { src: source, dest: destination }, async function ({ cwd, resolved }) {
+		assert.equal(this, runner);
+		assert.equal(cwd, process.cwd());
+		assert.equal(resolved[0]?.changed, true);
+		executions++;
+		logger.info("executing");
+		await nodeCp(source, destination);
+	});
+	const parent = runner.task("Build", build);
+	await runner.run(parent);
+	assert.deepEqual(events.filter(item => item.event === "taskStart" || item.event === "taskEnd").map(item => [item.event, item.message]), [
+		["taskStart", "Build"], ["taskStart", "Compile"], ["taskEnd", "Compile"], ["taskEnd", "Build"],
+	]);
+	const parentId = events.find(item => item.message === "Build")?.id;
+	const executorId = events.find(item => item.message === "Compile")?.id;
+	assert.equal(typeof executorId, "number");
+	assert.notEqual(executorId, parentId);
+	assert.equal(events.find(item => item.message === "executing")?.id, executorId);
+	assert.equal(events.find(item => item.message === `make (Compile): ${destination}`)?.id, executorId);
+	assert.equal(events.find(item => item.message === "make: checking inputs")?.id, parentId);
+	events.length = 0;
+	await runner.run(parent);
+	assert.equal(executions, 1);
+	assert.deepEqual(events.filter(item => item.event === "taskStart" || item.event === "taskEnd").map(item => item.message), ["Build", "Build"]);
+	const skipped = events.find(item => item.message === `make (Compile): ${destination} (skipped, up to date)`);
+	assert.ok(skipped);
+	assert.equal(skipped.id, events[0]?.id);
+	assert.ok(events.some(item => item.message === "make: skipping executor (0/1 changed)"));
+	events.length = 0;
+	await removeDirectory(destination);
+	await runner.run(parent);
+	assert.equal(executions, 2);
+	assert.deepEqual(events.filter(item => item.message === "Compile").map(item => item.event), ["taskStart", "taskEnd"]);
+});
+
+void test("named make skips lifecycle for absent inputs and completes it on executor failure", async t => {
+	const cwd = await temporaryDirectory();
+	const runner = new TaskRunner();
+	const events: string[] = [];
+	const onStart = (name: string) => { events.push(`start:${name}`); };
+	const onEnd = (name: string) => { events.push(`end:${name}`); };
+	const verbose: string[] = [];
+	const onVerbose = (message: string) => { verbose.push(message); };
+	logger.on("taskStart", onStart).on("taskEnd", onEnd).on("verbose", onVerbose);
+	t.after(() => { logger.off("taskStart", onStart).off("taskEnd", onEnd).off("verbose", onVerbose); });
+	const spec = { cwd, src: "source.txt", dest: "destination.txt" };
+	await runner.run(make("Optional", { ...spec, allowEmpty: true }, () => assert.fail("Must skip")));
+	assert.deepEqual(events, []);
+	assert.ok(verbose.includes("make (Optional): skipped, no source files matched (allowEmpty)"));
+	await assert.rejects(runner.run(make("Missing", spec, () => assert.fail("Must not run"))), /no source files/);
+	assert.deepEqual(events, []);
+	await writeFile(path.join(cwd, "source.txt"), "source");
+	const failure = new Error("executor failed");
+	await assert.rejects(runner.run(make("Failing", spec, () => { throw failure; })), error => error === failure);
+	assert.deepEqual(events, ["start:Failing", "end:Failing"]);
+});
+
+void test("make names stay isolated for a shared executor and forced runs", async t => {
+	const cwd = await temporaryDirectory();
+	await writeFile(path.join(cwd, "source.txt"), "source");
+	await writeFile(path.join(cwd, "destination.txt"), "destination");
+	const future = new Date(Date.now() + 2_000);
+	await utimes(path.join(cwd, "destination.txt"), future, future);
+	const runner = new TaskRunner();
+	const starts: { name: string; id: number | undefined }[] = [];
+	const onStart = (name: string) => { starts.push({ name, id: logger.taskId }); };
+	logger.on("taskStart", onStart);
+	t.after(() => { logger.off("taskStart", onStart); });
+	const ids: (number | undefined)[] = [];
+	const executor = async () => {
+		await Promise.resolve();
+		ids.push(logger.taskId);
+	};
+	const spec = { cwd, src: "source.txt", dest: "destination.txt", force: true };
+	const first = make("First", spec, executor);
+	const second = make("Second", spec, executor);
+	await runner.run(runner.parallel(first, second));
+	await runner.run(first);
+	assert.deepEqual(starts.map(item => item.name).sort(), ["First", "First", "Second"]);
+	assert.equal(new Set(starts.map(item => item.id)).size, 3);
+	assert.deepEqual(new Set(ids), new Set(starts.map(item => item.id)));
+	assert.equal(Object.hasOwn(executor, "displayName"), false);
+});
+
 void test("make resolves cwd and mapped destinations, tracks changed files and dependencies", async t => {
 	const directory = await temporaryDirectory();
 	await mkdir(path.join(directory, "src"));

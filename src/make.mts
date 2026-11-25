@@ -4,7 +4,7 @@ import path from "node:path";
 import { logger } from "./logger.mts";
 import { glob, map } from "./utils.mts";
 import type { GlobPattern, Destination } from "./utils.mts";
-import type { TaskFunction, TaskRunner } from "./runner.mts";
+import type { TaskExecutor, TaskFunction, TaskRunner } from "./runner.mts";
 
 export type MakeSpec = {
 	src: GlobPattern;
@@ -98,15 +98,18 @@ export function make(displayOrSpec: string | MakeSpec, specOrExecutor: MakeSpec 
 		logger.debug(`make: ${changedCount ? "running executor" : "skipping executor"} (${changedCount}/${resolved.length} changed)`);
 		
 		if (changedCount) {
-			for (const dest of new Set(resolved.filter(file => file.changed).map(file => file.dest)))
-				logger.verbose(`${label}: ${dest}`);
-			await executor.call(this, { cwd, resolved });
+			const run: TaskExecutor = async () => {
+				for (const dest of new Set(resolved.filter(file => file.changed).map(file => file.dest)))
+					logger.verbose(`${label}: ${dest}`);
+				await executor.call(this, { cwd, resolved });
+			};
+			if (display !== undefined) run.displayName = display;
+			await this.run(run);
 		} else {
 			for (const dest of new Set(resolved.map(file => file.dest)))
 				logger.verbose(`${label}: ${dest} (skipped, up to date)`);
 		}
 	};
 
-	result.displayName = display;
 	return result;
 }

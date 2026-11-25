@@ -68,7 +68,7 @@ Value options accept both `--logger simple` and `--logger=simple`. Boolean switc
 
 ## Tasks and logging
 
-Use `--loglevel=debug` to diagnose incremental builds. `make` logs resolved paths, modification times, the newest dependency, reasons for rebuilding, and whether it runs or skips the executor. Lifecycle start/end messages also appear for skipped tasks because checking freshness is itself a task execution. Debug logging also includes the effective options immediately before calling Rolldown, Sass Embedded, and Lightning CSS.
+Use `--loglevel=debug` to diagnose incremental builds. `make` logs resolved paths, modification times, the newest dependency, reasons for rebuilding, and whether it runs or skips the executor. A named `make` reports start/end messages and timing only when its executor runs; skipped checks still report their reasons at verbose/debug levels. The executor and its destination logs share the named task ID, while freshness checks inherit the surrounding task's ID. Debug logging also includes the effective options immediately before calling Rolldown, Sass Embedded, and Lightning CSS.
 
 - `task(name, executor)` declares a named task. Execute it through `runner.run(task)` or a composition helper to get lifecycle logging.
 - `series(...tasks)` runs in order and stops at the first failure.
