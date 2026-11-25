@@ -1,14 +1,5 @@
 import * as path from "node:path";
 import { glob as nodeGlob } from "node:fs/promises";
-
-export type GlobPattern = string | string[];
-
-export type GlobOptions = {
-    cwd?: string;
-    onlyFiles?: boolean;
-    followSymlinks?: boolean;
-}
-
 /**
  * Resolve file glob patterns lazily.
  *
@@ -19,10 +10,7 @@ export type GlobOptions = {
  * @param options Controls the working directory, file filtering, and symbolic-link traversal.
  * @returns An async iterator yielding matching paths as they are discovered.
  */
-export async function* glob(
-    patterns: GlobPattern,
-    { onlyFiles = true, ...nodeOptions }: GlobOptions = {},
-): AsyncGenerator<string> {
+export async function* glob(patterns, { onlyFiles = true, ...nodeOptions } = {}) {
     const cwd = path.resolve(nodeOptions.cwd ?? process.cwd());
     const requested = [patterns].flat();
     const includes = requested.filter((pattern) => !pattern.startsWith("!"));
@@ -33,30 +21,16 @@ export async function* glob(
         exclude: excludes,
         withFileTypes: true,
     })) {
-        if (onlyFiles && !entry.isFile() && !entry.isSymbolicLink()) continue;
+        if (onlyFiles && !entry.isFile() && !entry.isSymbolicLink())
+            continue;
         const relative = path.relative(cwd, path.join(entry.parentPath, entry.name));
         yield path.resolve(cwd, relative);
     }
 }
-
-
-export type MapOptions = { 
-	dir?: string; 
-	name?: string; 
-	ext?: string; 
-	prefix?: string; 
-	suffix?: string 
-} | { 
-	dir?: string; 
-	base: string 
-};
-
-export type MapFunction = (src: string) => string | MapOptions;
-
 /**
  * Transform a source path into a destination path.
  *
- * A string option is shorthand for `{ dir: options }`. Mapping options can
+ * A string is an exact file path, or a directory when it ends in `/` or `\\`. Mapping options can
  * change the destination directory, filename, extension, prefix, or suffix.
  * A mapping function may return either the final destination path or mapping
  * options, which are then applied to the source path.
@@ -65,30 +39,28 @@ export type MapFunction = (src: string) => string | MapOptions;
  * @param options A destination directory, mapping options, or function. A function receives the source path and returns a destination path or mapping options.
  * @returns The mapped destination path.
  */
-export function map(src: string, options: string | MapOptions | MapFunction): string {
+export function map(src, options) {
     if (typeof options === "function") {
         const mapped = options(src);
-        return typeof mapped === "string" ? mapped : map(src, mapped);
+        return map(src, mapped);
     }
-    if (typeof options === "string")
-        options = { dir: options };
-
-    const filter = ({ dir, name, ext }: Partial<path.ParsedPath>) => ({ dir, name, ext });
-
+    if (typeof options === "string") {
+        if (!/[\\/]$/.test(options))
+            return path.normalize(options);
+        options = { dir: options.replace(/[\\/]+$/, path.sep) };
+    }
+    const filter = ({ dir, name, ext }) => ({ dir, name, ext });
     const parsed = filter(path.parse(src));
     if ("base" in options) {
         return path.normalize(path.format({ dir: options.dir ?? parsed.dir, base: options.base }));
     }
-
-    let { prefix, suffix, dir, name, ext } = { ...parsed, ...options }
+    let { prefix, suffix, dir, name, ext } = { ...parsed, ...options };
     if (prefix)
         name = prefix + name;
     if (suffix)
         name = name + suffix;
-
     return path.normalize(path.format({ ...parsed, dir, name, ext }));
 }
-
 /**
  * Expand source glob patterns and map each result to a destination path.
  *
@@ -102,15 +74,18 @@ export function map(src: string, options: string | MapOptions | MapFunction): st
  * @param dest A destination directory, mapping options, or mapping function.
  * @returns An async iterator yielding mapped destination paths in discovery order.
  */
-export async function* resolve(src: GlobPattern, dest: string | MapOptions | MapFunction): AsyncGenerator<string> {
+export async function* resolve(src, dest) {
     const sourceIterator = glob(src)[Symbol.asyncIterator]();
     const first = await sourceIterator.next();
-    if (first.done) return;
+    if (first.done)
+        return;
     const second = await sourceIterator.next();
     if (!second.done && typeof dest === "string" && !/[\\/]$/.test(dest)) {
         throw new Error("A destination directory must end with '/' or '\\' when resolving multiple sources");
     }
     yield map(first.value, dest);
-    if (!second.done) yield map(second.value, dest);
-    for await (const file of { [Symbol.asyncIterator]: () => sourceIterator }) yield map(file, dest);
+    if (!second.done)
+        yield map(second.value, dest);
+    for await (const file of { [Symbol.asyncIterator]: () => sourceIterator })
+        yield map(file, dest);
 }

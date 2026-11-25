@@ -1,31 +1,124 @@
 {
     "name": "@foresoft/sip",
-    "version": "1.0",
+    "version": "0.0.1",
     "type": "module",
     "engines": {
-        "node": ">= 24.0.0"
+        "node": ">= 24.2.0"
     },
     "exports": {
-        ".": "./src/index.ts",
-        "./cli": "./src/cli.ts",
-        "./logger": "./src/logger.ts",
-        "./runner": "./src/runner.ts",
-        "./utils": "./src/utils.ts",
-        "./fs": "./src/fs.ts",
-        "./make": "./src/make.ts"
+        ".": {
+            "types": "./dist/index.d.mts",
+            "import": "./dist/index.mjs"
+        },
+        "./cli": {
+            "types": "./dist/cli.d.mts",
+            "import": "./dist/cli.mjs"
+        },
+        "./logger": {
+            "types": "./dist/logger.d.mts",
+            "import": "./dist/logger.mjs"
+        },
+        "./runner": {
+            "types": "./dist/runner.d.mts",
+            "import": "./dist/runner.mjs"
+        },
+        "./utils": {
+            "types": "./dist/utils.d.mts",
+            "import": "./dist/utils.mjs"
+        },
+        "./fs": {
+            "types": "./dist/fs.d.mts",
+            "import": "./dist/fs.mjs"
+        },
+        "./make": {
+            "types": "./dist/make.d.mts",
+            "import": "./dist/make.mjs"
+        },
+        "./watch": {
+            "types": "./dist/watch.d.mts",
+            "import": "./dist/watch.mjs"
+        },
+        "./rolldown": {
+            "types": "./dist/rolldown.d.mts",
+            "import": "./dist/rolldown.mjs"
+        },
+        "./lightningscss": {
+            "types": "./dist/lightningscss.d.mts",
+            "import": "./dist/lightningscss.mjs"
+        },
+        "./image": {
+            "types": "./dist/image.d.mts",
+            "import": "./dist/image.mjs"
+        },
+        "./svg": {
+            "types": "./dist/svg.d.mts",
+            "import": "./dist/svg.mjs"
+        },
+        "./svg-sprite": {
+            "types": "./dist/svg-sprite.d.mts",
+            "import": "./dist/svg-sprite.mjs"
+        }
     },
     "bin": {
-        "sip": "./src/cli.ts"
+        "sip": "./dist/cli.mjs"
     },
+    "types": "./dist/index.d.mts",
+    "files": [
+        "dist"
+    ],
     "devDependencies": {
-        "@types/node": "26.2.0",
-        "oxlint": "^1.79.0",
-        "oxlint-tsgolint": "^7.0.2001",
-		"@ogs-gmbh/oxlint-presets": "1.1.0",
+        "@napi-rs/image": "^1.15.0",
+        "@ogs-gmbh/oxlint-presets": "1.3.0",
+        "@types/node": "26.6.3",
+        "@types/svg-sprite": "^0.0.39",
+        "lightningcss": "^1.33.0",
+        "oxlint": "1.85.0",
+        "oxlint-tsgolint": "7.0.2003",
+        "rolldown": "^1.2.12",
+        "sass-embedded": "^1.105.1",
+        "source-map-js": "^1.2.2",
+        "svg-sprite": "^2.0.4",
+        "svgo": "^4.1.0",
         "typescript": "7.0.2"
     },
+    "peerDependencies": {
+        "@napi-rs/image": "^1.15.0",
+        "lightningcss": "^1.33.0",
+        "rolldown": "^1.2.12",
+        "sass-embedded": "^1.105.1",
+        "source-map-js": "^1.2.1",
+        "svg-sprite": "^2.0.4",
+        "svgo": "^4.1.0"
+    },
+    "peerDependenciesMeta": {
+        "@napi-rs/image": {
+            "optional": true
+        },
+        "source-map-js": {
+            "optional": true
+        },
+        "sass-embedded": {
+            "optional": true
+        },
+        "lightningcss": {
+            "optional": true
+        },
+        "rolldown": {
+            "optional": true
+        },
+        "svgo": {
+            "optional": true
+        },
+        "svg-sprite": {
+            "optional": true
+        }
+    },
     "scripts": {
+        "compile": "node scripts/clean.mjs && tsc --project tsconfig.build.json",
         "lint": "oxlint --config .oxlint.config.js src tests",
-        "test": "node --test tests/sip.test.ts"
+        "test": "node --test tests/sip.test.mts tests/rolldown.test.mts tests/lightningscss.test.mts tests/image.test.mts tests/svg.test.mts tests/watch.test.mts",
+        "typecheck": "tsc --noEmit",
+        "check": "npm run compile && npm run lint && npm run typecheck && npm test",
+        "test:package": "node --test tests/package.test.mts"
     }
 }

@@ -1,0 +1,12 @@
+{
+    "extends": "./tsconfig.json",
+    "include": ["src/**/*.mts"],
+    "compilerOptions": {
+        "noEmit": false,
+        "declaration": true,
+        "emitDeclarationOnly": false,
+        "rewriteRelativeImportExtensions": true,
+        "rootDir": "src",
+        "outDir": "dist"
+    }
+}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import * as os from "node:os";
-import { Logger } from "./logger.ts";
+import { logger } from "./logger.mts";
+import type { Logger } from "./logger.mts";
 
 
 export type TaskFunction = (this: TaskRunner) => Promise<void> | void;
@@ -12,33 +13,28 @@ export type TaskExecutor = {
 	displayName?: string;
 };
 
-export interface ParallelOptions { maxDop?: number; }
+export type ParallelOptions = { maxDop?: number; }
 
 type Truthy = boolean | string | number | object | null | undefined;
 
 /** Runs named tasks sequentially or concurrently and records their performance. */
 export class TaskRunner {
-	
-	constructor(logger?: Logger) { 
-		this.#logger = logger ?? new Logger(); 
-	}
 
-	#logger: Logger;
-
-	get logger() : Logger { 
-		return this.#logger; 
+	/** Alias for SIP's shared logger. */
+	get logger() : Logger {
+		return logger;
 	}
 
 	run = async (taskFn: TaskExecutor): Promise<void> => {
 		const displayName = taskFn.displayName;
 		if(displayName) {
-			await this.#logger.withTask(async () => {
+			await logger.withTask(async () => {
 				const start = performance.now();
-				this.#logger.taskStart(displayName);
+				logger.taskStart(displayName);
 				try {
 					await taskFn.call(this);
 				} finally {
-					this.#logger.taskEnd(displayName, performance.now() - start);
+					logger.taskEnd(displayName, performance.now() - start);
 				}
 			});
 		} else {
@@ -51,7 +47,7 @@ export class TaskRunner {
 		assert.equal(typeof displayName, "string", "displayName must be a string");
 		assert.ok(displayName.length > 0, "displayName must be non-empty");
 		assert.equal(typeof taskFn, "function", "taskFn must be a function");
-		
+
 		const result = async () => await this.run(taskFn);
 		result.displayName = displayName;
 		return result;
@@ -77,26 +73,31 @@ export class TaskRunner {
 		assert.ok(tasks.length > 0, "parallel requires at least one task");
 		assert.ok(tasks.every((fn) => typeof fn === "function"), "parallel tasks must be functions");
 		assert.ok(options.maxDop === undefined || (Number.isInteger(options.maxDop) && options.maxDop > 0), "maxDop must be a positive integer");
-		
+
 		options = { maxDop: os.cpus().length, ...options };
-		
+
 		const result = async () => {
 			let next = 0;
-			let failed = false;
+			const state = { failed: false };
+			// Other workers may change this while the current worker is awaiting a task.
+			const hasFailed = () => state.failed;
 			let firstError: unknown;
 			const worker = async () => {
-				while (!failed && next < tasks.length) {
-					const fn = tasks[next++]; 
+				while (!hasFailed() && next < tasks.length) {
+					const fn = tasks[next++];
+					assert.ok(fn, "parallel task index must be in range");
 					try {
 						await this.run(fn);
 					} catch (error) {
-						if (!failed) firstError = error;
-						failed = true;
+						if (!hasFailed())
+							firstError = error;
+						state.failed = true;
 					}
 				}
 			};
 			await Promise.all(Array.from({ length: Math.min(options.maxDop ?? (tasks.length || 1), tasks.length || 1) }, worker));
-			if (failed) throw firstError;
+			if (state.failed)
+				throw firstError;
 		};
 		return result;
 	}
@@ -104,7 +105,7 @@ export class TaskRunner {
 	/** Run tasks only when the condition resolves to true. */
 	conditional = (condition: Truthy | (() => Truthy | Promise<Truthy>), taskFn: TaskExecutor): TaskExecutor => {
 		assert.equal(typeof taskFn, "function", "taskFn must be a function");
-		
+
 		if(typeof condition === "function") {
 			return async () => {
 				if(await condition()) {

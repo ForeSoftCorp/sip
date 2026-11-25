@@ -1,0 +1,18 @@
+import { TaskRunner } from "./runner.mts";
+export { logger } from "./logger.mts";
+/** The default task runner. */
+export declare const runner: TaskRunner;
+export declare const vars: Record<string, any>;
+export type { TaskFunction, TaskExecutor, ParallelOptions } from "./runner.mts";
+export type { Destination, GlobOptions, GlobPattern, MapOptions, MapFunction } from "./utils.mts";
+export type { FileSystemOptions, TransferOptions } from "./fs.mts";
+export { glob, map, resolve } from "./utils.mts";
+export { cp, mv, rm, rmdir, mkdir } from "./fs.mts";
+export { make } from "./make.mts";
+export { watch, stopWatch } from "./watch.mts";
+export type { WatchSpec, WatchOptions, WatchAddress } from "./watch.mts";
+export type { MakeSpec, MakeContext, MakeExecutor } from "./make.mts";
+export declare const task: (displayName: string, taskFn: import("./runner.mts").TaskExecutor) => import("./runner.mts").TaskExecutor;
+export declare const series: (...taskFns: import("./runner.mts").TaskExecutor[]) => import("./runner.mts").TaskExecutor;
+export declare const parallel: (...args: [import("./runner.mts").ParallelOptions, ...import("./runner.mts").TaskExecutor[]] | import("./runner.mts").TaskExecutor[]) => import("./runner.mts").TaskExecutor;
+export declare const conditional: (condition: (string | number | boolean | object | null | undefined) | (() => (string | number | boolean | object | null | undefined) | Promise<string | number | boolean | object | null | undefined>), taskFn: import("./runner.mts").TaskExecutor) => import("./runner.mts").TaskExecutor;
