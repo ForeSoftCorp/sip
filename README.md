@@ -91,6 +91,60 @@ Nested named tasks receive their own IDs; unnamed tasks inherit the current ID. 
 
 For custom output, attach a sink with `logger.attach({ info(message, ...args) { /* ... */ } })`. Read `logger.taskId` inside the event handler to capture its ID; existing event arguments are unchanged. Provide an `error` handler when using the logger without the CLI, because it uses EventEmitter's special `error` event.
 
+## Running Node, npm, and npx
+
+Import `node`, `npm`, and `npx` from `@foresoft/sip` or `@foresoft/sip/process`.
+Each runs immediately and returns `Promise<void>`, rejecting spawn errors,
+nonzero exit codes, signals, and cancellation. Arguments are arrays of literal
+strings, not shell command lines:
+
+```ts
+import { node, npm, npx, task } from "@foresoft/sip";
+
+export const lint = task("Lint", () => node([
+    "./node_modules/oxlint/bin/oxlint", "src", "--deny-warnings",
+]));
+export const test = () => npm(["test"], { cwd: "packages/app" });
+export const check = () => npx(["--no", "--", "oxlint", "src"]);
+```
+
+`ProcessOptions` accepts `cwd`, `env` (overrides merged into the current
+environment; `undefined` removes a variable), `stdio` (`"inherit"` by default
+or `"ignore"`), and an `AbortSignal` in `signal`. The parent working directory
+and environment are unchanged. `ProcessError` exposes `command`, `exitCode`,
+and `signal` for unsuccessful exits. Cancellation waits for the launched child
+or worker to stop; it does not guarantee termination of descendant processes.
+Output goes directly to the terminal, independently of sip's logger level;
+verbose logging reports the start under the surrounding task ID.
+
+`node` uses the current Node executable and accepts Node CLI flags, such as
+`node(["--eval", "console.log('hello')"])`. npm/npx are launched through their
+JavaScript CLI files with the same executable, avoiding shell wrappers on
+Windows. Discovery uses an active npm's `npm_execpath`, standard installations
+on `PATH`, then the Node installation. No extra runtime dependency is needed.
+Custom package-manager shims that do not expose npm's CLI files are unsupported.
+The helpers retain npm/npx's normal behavior: npm scripts may invoke a shell,
+and npx may prompt to download a missing package. Pass `--no` to decline those
+downloads, and `--offline` when network access should be disabled. Use `--`
+before the command name to separate npx options from command arguments.
+
+`node` also accepts `NodeOptions` with `{ worker: true }` for compatible Node
+scripts. This starts a fresh worker thread in the same OS process, with separate
+arguments, environment, module cache, and exit state. The first argument must
+be a script path, followed by script arguments; Node CLI flags are not supported
+in this mode. Workers use the parent's working directory (`cwd` must refer to
+that same directory), have no interactive stdin, and cannot call
+`process.chdir()`. Native dependencies must support worker threads. Each call
+starts a new worker; arbitrary CLI scripts are never imported into sip's main
+thread. The script runs as the entry point, including `require.main` and
+`import.meta.main`. Node inherits the caller's runtime flags; flags incompatible
+with a file entry point (such as `--input-type`) require using child-process mode.
+See the [Node worker documentation](https://nodejs.org/api/worker_threads.html#class-worker).
+
+```ts
+await node(["./scripts/check.mjs", "--strict"], { worker: true });
+```
+
 ## Watching files
 
 `watch([{ src, cwd?, run }], options?)` creates a task that stays active until stopped. Each `src` accepts the same glob patterns and `!` exclusions as `glob()`. Executors run through the calling runner when matched files are added, edited, renamed, or removed; they do not run initially. Use `series(build, watch(...))` for an initial build.

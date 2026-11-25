@@ -10,6 +10,8 @@ export { glob, map, resolve } from "./utils.mts";
 export { cp, mv, rm, rmdir, mkdir } from "./fs.mts";
 export { make } from "./make.mts";
 export { watch, stopWatch } from "./watch.mts";
+export { node, npm, npx, ProcessError } from "./process.mts";
+export type { ProcessOptions, NodeOptions } from "./process.mts";
 export type { WatchSpec, WatchOptions, WatchAddress } from "./watch.mts";
 export type { MakeSpec, MakeContext, MakeExecutor } from "./make.mts";
 export declare const task: (displayName: string, taskFn: import("./runner.mts").TaskExecutor) => import("./runner.mts").TaskExecutor;

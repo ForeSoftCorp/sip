@@ -37,22 +37,37 @@ void test("prebuilt package installs into node_modules with working exports, typ
 		assert.equal(help.status, 0, help.stderr);
 		assert.match(help.stdout, /Usage: sip/);
 		await writeFile(path.join(directory, "taskfile.mts"), `
-      import { task, logger, runner } from "@foresoft/sip";
+      import { task, logger, runner, node, npm, npx } from "@foresoft/sip";
+      import { node as processNode } from "@foresoft/sip/process";
       import { TaskRunner } from "@foresoft/sip/runner";
       import { Logger, logger as sharedLogger } from "@foresoft/sip/logger";
       if (!(runner instanceof TaskRunner) || !(logger instanceof Logger)) throw new Error("Duplicate module instances");
       if (logger !== sharedLogger || new TaskRunner().logger !== sharedLogger) throw new Error("Logger is not shared");
-      export default task("Smoke", () => { logger.info("compiled package works"); });
+      if (node !== processNode || typeof npm !== "function" || typeof npx !== "function") throw new Error("Missing process helpers");
+      export default task("Smoke", async () => {
+        await node(["--version"], { stdio: "ignore" });
+        await node(["./worker.mjs"], { worker: true });
+        logger.info("compiled package works");
+      });
     `);
+		await writeFile(path.join(directory, "worker.mjs"), "console.log('compiled worker works');");
 		const run = spawnSync(process.execPath, [path.join(root, manifest.bin.sip), "--no-timestamp"], { cwd: directory, encoding: "utf8" });
 		assert.equal(run.status, 0, run.stderr);
 		assert.match(run.stdout, /compiled package works/);
+		assert.match(run.stdout, /compiled worker works/);
 		await writeFile(path.join(directory, "consumer.mts"), `
-      import { logger, watch, type WatchSpec, type TaskExecutor } from "@foresoft/sip";
+      import { logger, watch, node, npm, npx, type NodeOptions, type ProcessOptions, type WatchSpec, type TaskExecutor } from "@foresoft/sip";
       import { TaskRunner } from "@foresoft/sip/runner";
       const run: TaskExecutor = () => {};
       const specs: WatchSpec[] = [{ src: "*.mts", run }];
       new TaskRunner().run(watch(specs));
+      const nodeOptions: NodeOptions = { worker: true };
+      const processOptions: ProcessOptions = { cwd: ".", stdio: "ignore" };
+      node(["script.mjs"], nodeOptions);
+      npm(["run", "build"], processOptions);
+      npx(["--no", "--", "tool"], processOptions);
+      // @ts-expect-error Arguments must be an array, not a shell command string.
+      node("script.mjs --flag");
       // @ts-expect-error Runners always use the shared logger and accept no constructor arguments.
       new TaskRunner(logger);
       // @ts-expect-error A numeric glob is not valid.

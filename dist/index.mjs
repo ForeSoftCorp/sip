@@ -7,6 +7,7 @@ export { glob, map, resolve } from "./utils.mjs";
 export { cp, mv, rm, rmdir, mkdir } from "./fs.mjs";
 export { make } from "./make.mjs";
 export { watch, stopWatch } from "./watch.mjs";
+export { node, npm, npx, ProcessError } from "./process.mjs";
 export const task = runner.task.bind(runner);
 export const series = runner.series.bind(runner);
 export const parallel = runner.parallel.bind(runner);

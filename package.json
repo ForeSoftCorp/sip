@@ -38,6 +38,10 @@
             "types": "./dist/watch.d.mts",
             "import": "./dist/watch.mjs"
         },
+        "./process": {
+            "types": "./dist/process.d.mts",
+            "import": "./dist/process.mjs"
+        },
         "./rolldown": {
             "types": "./dist/rolldown.d.mts",
             "import": "./dist/rolldown.mjs"
@@ -116,7 +120,7 @@
     "scripts": {
         "compile": "node scripts/clean.mjs && tsc --project tsconfig.build.json",
         "lint": "oxlint --config .oxlint.config.js src tests",
-        "test": "node --test tests/sip.test.mts tests/rolldown.test.mts tests/lightningscss.test.mts tests/image.test.mts tests/svg.test.mts tests/watch.test.mts",
+        "test": "node --test tests/sip.test.mts tests/rolldown.test.mts tests/lightningscss.test.mts tests/image.test.mts tests/svg.test.mts tests/watch.test.mts tests/process.test.mts",
         "typecheck": "tsc --noEmit",
         "check": "npm run compile && npm run lint && npm run typecheck && npm test",
         "test:package": "node --test tests/package.test.mts"
