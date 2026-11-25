@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -10,8 +10,11 @@ import { logger } from "../src/index.mts";
 import { TaskRunner } from "../src/runner.mts";
 import { lightningscss } from "../src/lightningscss.mts";
 
+// Sass uses canonical paths; Windows CI may spell TEMP with an 8.3 short name.
+const tempDirectory = await realpath(os.tmpdir());
+
 void test("lightningscss skips Sass when false or omitted, including loading the optional dependency", async t => {
-	const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-css-"));
+	const cwd = await mkdtemp(path.join(tempDirectory, "sip-css-"));
 	t.after(() => rm(cwd, { recursive: true, force: true }));
 	const source = ".box { color: red; user-select: none; }";
 	// Extension does not implicitly enable Sass.
@@ -42,7 +45,7 @@ void test("lightningscss skips Sass when false or omitted, including loading the
 });
 
 void test("lightningscss enables Sass defaults with true or an empty options object", async t => {
-	const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-sass-defaults-"));
+	const cwd = await mkdtemp(path.join(tempDirectory, "sip-sass-defaults-"));
 	t.after(() => rm(cwd, { recursive: true, force: true }));
 	await writeFile(path.join(cwd, "main.scss"), "$color: red; .box { color: $color; }");
 	for (const sass of [true, {}]) {
@@ -54,7 +57,7 @@ void test("lightningscss enables Sass defaults with true or an empty options obj
 void test("lightningscss compiles imports, minifies, and applies browser targets in separate directories", async t => {
 	const originalCwd = process.cwd();
 	await Promise.all(["red", "blue"].map(async color => {
-		const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-scss-"));
+		const cwd = await mkdtemp(path.join(tempDirectory, "sip-scss-"));
 		t.after(() => rm(cwd, { recursive: true, force: true }));
 		await mkdir(path.join(cwd, "includes"));
 		await writeFile(path.join(cwd, "includes/_theme.scss"), `$color: ${color};`);
@@ -74,7 +77,7 @@ void test("lightningscss compiles imports, minifies, and applies browser targets
 
 for (const mapOptions of [{ sourceMap: true }, { sourcemap: true }, { sourceMap: true, sourcemap: false }]) {
 	void test(`lightningscss chains source maps with ${JSON.stringify(mapOptions)} and allows disabling minification`, async t => {
-		const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-scss-map-"));
+		const cwd = await mkdtemp(path.join(tempDirectory, "sip-scss-map-"));
 		t.after(() => rm(cwd, { recursive: true, force: true }));
 		const source = "$color: red;\n.box {\n  color: $color;\n}\n";
 		await writeFile(path.join(cwd, "main.scss"), source);
@@ -102,7 +105,7 @@ for (const mapOptions of [{ sourceMap: true }, { sourcemap: true }, { sourceMap:
 for (const sass of [false, true]) {
 	for (const basename of ["main#dark", "main%theme", "main%20light"]) {
 		void test(`lightningscss source maps escape ${basename} with sass=${sass}`, async t => {
-			const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-map-#%-"));
+			const cwd = await mkdtemp(path.join(tempDirectory, "sip-map-#%-"));
 			t.after(() => rm(cwd, { recursive: true, force: true }));
 			await mkdir(path.join(cwd, "src"));
 			const src = path.join("src", `${basename}.${sass ? "scss" : "css"}`);
@@ -136,7 +139,7 @@ for (const sass of [false, true]) {
 }
 
 void test("lightningscss source maps preserve imported file and custom URLs", async t => {
-	const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-map-import-#%-"));
+	const cwd = await mkdtemp(path.join(tempDirectory, "sip-map-import-#%-"));
 	t.after(() => rm(cwd, { recursive: true, force: true }));
 	const local = path.join(cwd, "theme#100%20.scss");
 	const localSource = ".local { color: blue; }";
@@ -176,7 +179,7 @@ void test("lightningscss source maps preserve imported file and custom URLs", as
 });
 
 void test("lightningscss sourceMap: false takes precedence over sourcemap: true", async t => {
-	const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-scss-map-disabled-"));
+	const cwd = await mkdtemp(path.join(tempDirectory, "sip-scss-map-disabled-"));
 	t.after(() => rm(cwd, { recursive: true, force: true }));
 	await writeFile(path.join(cwd, "main.scss"), ".box { color: red; }");
 	await lightningscss("main.scss", "out.css", { cwd, sass: true, sourceMap: false, sourcemap: true });
@@ -185,7 +188,7 @@ void test("lightningscss sourceMap: false takes precedence over sourcemap: true"
 });
 
 void test("lightningscss routes Sass and Lightning CSS diagnostics through the task logger", async t => {
-	const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-scss-log-"));
+	const cwd = await mkdtemp(path.join(tempDirectory, "sip-scss-log-"));
 	t.after(() => rm(cwd, { recursive: true, force: true }));
 	await writeFile(path.join(cwd, "main.scss"), '@warn "sass warning"; @debug "sass debug"; @unknown hello; .box { color: red; }');
 	const messages: [string, unknown, number | undefined][] = [];
@@ -208,7 +211,7 @@ void test("lightningscss routes Sass and Lightning CSS diagnostics through the t
 });
 
 void test("lightningscss rejects invalid inputs and preserves output on compilation or processing errors", async t => {
-	const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-scss-error-"));
+	const cwd = await mkdtemp(path.join(tempDirectory, "sip-scss-error-"));
 	t.after(() => rm(cwd, { recursive: true, force: true }));
 	const dest = path.join(cwd, "out.css");
 	await writeFile(dest, "previous output");

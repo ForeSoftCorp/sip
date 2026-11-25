@@ -14,6 +14,7 @@ export async function lightningscss(src, dest, options = {}) {
     const cwd = path.resolve(baseDirectory ?? process.cwd());
     const input = path.resolve(cwd, src);
     const file = path.resolve(cwd, dest);
+    const projectRoot = path.resolve(cwd, cssOptions.projectRoot ?? ".");
     const { transform } = await import("lightningcss");
     logger.verbose(`lightningscss: ${file}`);
     let code;
@@ -35,11 +36,13 @@ export async function lightningscss(src, dest, options = {}) {
         const compiled = await compileAsync(input, compileOptions);
         code = Buffer.from(compiled.css);
         if (compiled.sourceMap) {
-            // Lightning CSS combines these with raw filesystem filenames. Decode Sass's
-            // file URLs first so local paths share one representation during chaining.
+            // Lightning CSS treats input-map sources as relative to projectRoot.
+            // Decode file URLs before rebasing; encode them only in the final map.
             inputSourceMap = JSON.stringify({
                 ...compiled.sourceMap,
-                sources: compiled.sourceMap.sources.map(source => source.startsWith("file:") ? fileURLToPath(source) : source),
+                sources: compiled.sourceMap.sources.map(source => source.startsWith("file:")
+                    ? path.relative(projectRoot, fileURLToPath(source)).split(path.sep).join("/")
+                    : source),
             });
         }
     }
@@ -51,7 +54,7 @@ export async function lightningscss(src, dest, options = {}) {
         sourceMap,
         filename: input,
         code,
-        projectRoot: path.resolve(cwd, cssOptions.projectRoot ?? "."),
+        projectRoot,
         minify: cssOptions.minify ?? true,
     };
     if (inputSourceMap !== undefined)
@@ -69,7 +72,7 @@ export async function lightningscss(src, dest, options = {}) {
         map.sources = map.sources.map((source) => {
             if (!path.isAbsolute(source) && URL.canParse(source))
                 return source;
-            const absolute = path.resolve(cwd, cssOptions.projectRoot ?? ".", source);
+            const absolute = path.resolve(projectRoot, source);
             const relative = path.relative(path.dirname(file), absolute);
             return path.isAbsolute(relative) ? pathToFileURL(absolute).href : relative.split(path.sep).map(encodeURIComponent).join("/");
         });
