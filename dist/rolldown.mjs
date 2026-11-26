@@ -35,11 +35,14 @@ export async function rolldown(src, dest, options = {}) {
             throw Object.assign(new Error(message), typeof log === "string" ? {} : log);
         const details = typeof log === "string" ? [] : [log];
         if (level === "warn")
-            logger.warning(message, ...details);
+            logger.warning(message);
         else if (level === "info")
-            logger.info(message, ...details);
+            logger.info(message);
         else
             logger.debug(message, ...details);
+        // Keep structured diagnostics out of normal console output, which already has the message.
+        if (level !== "debug" && typeof log !== "string")
+            logger.debug("rolldown: diagnostic", log);
     };
     const { build } = await import("rolldown");
     const buildOptions = {
