@@ -50,9 +50,9 @@ void test("rolldown routes logs through SIP with task IDs and supports logging h
 	const cwd = await mkdtemp(path.join(os.tmpdir(), "sip-rolldown-logs-"));
 	t.after(() => rm(cwd, { recursive: true, force: true }));
 	await writeFile(path.join(cwd, "entry.js"), "export const value = 1;");
-	const messages: [string, unknown, number | undefined][] = [];
+	const messages: [string, unknown, number | undefined, unknown[]][] = [];
 	for (const level of ["warning", "info", "debug"] as const) {
-		const listener = (message: unknown) => messages.push([level, message, logger.taskId]);
+		const listener = (message: unknown, ...args: unknown[]) => messages.push([level, message, logger.taskId, args]);
 		logger.on(level, listener);
 		t.after(() => logger.off(level, listener));
 	}
@@ -71,9 +71,19 @@ void test("rolldown routes logs through SIP with task IDs and supports logging h
 			next(level, level === "warn" ? { ...log, message: `handled: ${log.message}` } : log);
 		},
 	})));
+	// Console sinks print every argument: normal logs must not repeat the raw diagnostic.
+	assert.deepEqual(messages.filter(([level]) => level !== "debug").map(([level, message, , args]) => [level, message, ...args]), [
+		["warning", "handled: warning message"], ["info", "info message"],
+	]);
+	const diagnostics = messages.filter(([level, message]) => level === "debug" && message === "rolldown: diagnostic");
+	assert.deepEqual(diagnostics.map(([, , , args]) => args[0]), [
+		{ code: "PLUGIN_WARNING", plugin: "messages", message: "handled: warning message" },
+		{ code: "PLUGIN_LOG", plugin: "messages", message: "info message" },
+	]);
 	assert.deepEqual(messages.map(([level, message]) => [level, message]), [
 		["debug", "rolldown: effective build options"],
-		["warning", "handled: warning message"], ["info", "info message"], ["debug", "debug message"],
+		["warning", "handled: warning message"], ["debug", "rolldown: diagnostic"],
+		["info", "info message"], ["debug", "rolldown: diagnostic"], ["debug", "debug message"],
 	]);
 	assert.ok(messages.length > 0);
 	assert.ok(messages.every(([, , id]) => id !== undefined && id === messages[0]?.[2]));
